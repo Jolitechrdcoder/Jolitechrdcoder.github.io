@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>trrashbot</title>
+    <style>
+        body, html {
+            height: 100%;
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            background: #000;
+        }
+
+        .background-video {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 1;
+        }
+
+        .overlay-video {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 2;
+            display: none;
+        }
+
+        @media (max-width: 600px) {
+            body, html {
+                flex-direction: column;
+            }
+
+            .background-video,
+            .overlay-video {
+                object-fit: contain;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Videos de fondo -->
+    <video class="background-video" id="bgVideo1" muted>
+        <source src="./comerciales/1.mp4" type="video/mp4">
+    </video>
+    <video class="background-video" id="bgVideo2" muted>
+        <source src="./comerciales/2.mp4" type="video/mp4">
+    </video>
+    <video class="background-video" id="bgVideo3" muted>
+        <source src="./comerciales/3.mp4" type="video/mp4">
+    </video>
+
+    <!-- Videos superpuestos -->
+    <video class="overlay-video" id="video1">
+        <source src="emergentes/frase1.mp4" type="video/mp4">
+    </video>
+    <video class="overlay-video" id="video2">
+        <source src="emergentes/frase2.mp4" type="video/mp4">
+    </video>
+    <video class="overlay-video" id="video3">
+        <source src="emergentes/frase3.mp4" type="video/mp4">
+    </video>
+    <video class="overlay-video" id="video4">
+        <source src="emergentes/frase4.mp4" type="video/mp4">
+    </video>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+    <script>
+        let lastPlayedVideo = null;
+        let currentBgVideo = 0;
+        const bgVideos = ['bgVideo1', 'bgVideo2', 'bgVideo3'];
+
+        // Función para manejar la reproducción cíclica de videos de fondo
+        function setupBackgroundVideos() {
+            bgVideos.forEach((videoId, index) => {
+                const video = document.getElementById(videoId);
+                video.style.display = index === 0 ? 'block' : 'none';
+                
+                video.addEventListener('ended', () => {
+                    video.style.display = 'none';
+                    currentBgVideo = (currentBgVideo + 1) % bgVideos.length;
+                    const nextVideo = document.getElementById(bgVideos[currentBgVideo]);
+                    nextVideo.style.display = 'block';
+                    nextVideo.play();
+                });
+            });
+
+            // Iniciar el primer video de fondo
+            const firstVideo = document.getElementById(bgVideos[0]);
+            firstVideo.play().catch(error => {
+                console.log("Autoplay was prevented:", error);
+            });
+        }
+
+        function playRandomVideo() {
+            const videos = ['video1', 'video2', 'video3', 'video4'];
+            let randomVideo;
+
+            do {
+                randomVideo = videos[Math.floor(Math.random() * videos.length)];
+            } while (randomVideo === lastPlayedVideo);
+
+            if (lastPlayedVideo) {
+                const lastVideoElement = document.getElementById(lastPlayedVideo);
+                lastVideoElement.pause();
+                lastVideoElement.style.display = 'none';
+            }
+
+            const videoElement = document.getElementById(randomVideo);
+            videoElement.style.display = 'block';
+            videoElement.play();
+
+            // Cuando termine el video superpuesto, ocultarlo
+            videoElement.onended = () => {
+                videoElement.style.display = 'none';
+            };
+
+            lastPlayedVideo = randomVideo;
+        }
+
+        const hostname = "mqtt-dashboard.com";
+        const port = 8884;
+        const clientId = `clientId-${new Date().getUTCMilliseconds()}`;
+        const username = "webclient";
+        const password = "Super$icher123";
+        const topic = "trash1";
+        const mqttClient = new Paho.MQTT.Client(hostname, port, clientId);
+
+        mqttClient.onMessageArrived = onMessageArrived;
+        mqttClient.onConnectionLost = onConnectionLost;
+
+        function connect() {
+            mqttClient.connect({
+                onSuccess: onConnected,
+                onFailure: onConnectionFailed,
+                keepAliveInterval: 10,
+                userName: username,
+                useSSL: true,
+                password: password
+            });
+        }
+
+        function onConnected() {
+            console.log("Connected");
+            mqttClient.subscribe(topic);
+        }
+
+        function onConnectionFailed(res) {
+            console.log(`Connect failed: ${res.errorMessage}`);
+        }
+
+        function onConnectionLost(res) {
+            if (res.errorCode !== 0) {
+                console.log(`Connection lost: ${res.errorMessage}`);
+                connect();
+            }
+        }
+
+        function onMessageArrived(message) {
+            console.log(`${message.destinationName}: ${message.payloadString}`);
+            if (message.destinationName === topic && message.payloadString === '1') {
+                playRandomVideo();
+            }
+        }
+
+        // Iniciar todo cuando se carga la página
+        window.onload = () => {
+            setupBackgroundVideos();
+            connect();
+        };
+    </script>
+</body>
+</html>
